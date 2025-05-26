@@ -33,8 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+
     - name: Build a Docker image
       run: docker build -t snyk-test .
+
     - name: Run Snyk to check Docker image for vulnerabilities
       continue-on-error: true
       uses: snyk/actions/docker@14818c4695ecc4045f33c9cee9e795a788711ca4
@@ -44,8 +46,14 @@ jobs:
         image: snyk-test
         args: --file=Dockerfile
 
-    - name: Fix securitySeverity null issue in SARIF
-      run: sed -i 's/"securitySeverity":null/"securitySeverity":0.0/g' snyk.sarif
+    - name: Show original SARIF file content
+      run: cat snyk.sarif
+
+    - name: Fix securitySeverity null issue in SARIF with jq
+      run: |
+        sudo apt-get update && sudo apt-get install -y jq
+        jq 'walk(if type == "object" and has("securitySeverity") and .securitySeverity == null then .securitySeverity = 0.0 else . end)' snyk.sarif > snyk-fixed.sarif
+        mv snyk-fixed.sarif snyk.sarif
 
     - name: Show fixed SARIF file content
       run: cat snyk.sarif
@@ -54,4 +62,3 @@ jobs:
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: snyk.sarif
-
