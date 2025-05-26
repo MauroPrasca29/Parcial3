@@ -18,6 +18,8 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  schedule:
+    - cron: '16 23 * * 4'
 
 permissions:
   contents: read
@@ -30,28 +32,40 @@ jobs:
       actions: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t snyk-test .
+    - name: Build Docker image
+      run: docker build -t snyk-test .
 
-      - name: Run Snyk scan
-        continue-on-error: true
-        uses: snyk/actions@v0.13.0  # Versión válida según la documentación
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: docker  # Indica que es para Docker
-          args: --file=Dockerfile --sarif-file-output=snyk.sarif
+    - name: Run Snyk to check Docker image for vulnerabilities
+      continue-on-error: true
+      uses: snyk/actions/docker@v2
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        image: snyk-test
+        args: >
+          --file=Dockerfile
+          --sarif-file-output=snyk.sarif
 
-      - name: Fix null securitySeverity in SARIF
-        run: |
-          sudo apt-get update && sudo apt-get install -y jq
-          jq 'walk(if type == "object" and has("securitySeverity") and .securitySeverity == null 
-               then .securitySeverity = 0.0 else . end)' snyk.sarif > fixed.sarif
-          mv fixed.sarif snyk.sarif
+    - name: Fix securitySeverity null issue in SARIF
+      if: always()
+      run: |
+        if [ -f snyk.sarif ]; then
+          sed -i 's/"securitySeverity":null/"securitySeverity":0.0/g' snyk.sarif
+        else
+          echo "snyk.sarif no encontrado"
+        fi
 
-      - name: Upload SARIF to GitHub
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: snyk.sarif
+    - name: Show fixed SARIF file content
+      if: always()
+      run: |
+        if [ -f snyk.sarif ]; then
+          cat snyk.sarif
+        fi
+
+    - name: Upload result to GitHub Code Scanning
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: snyk.sarif
