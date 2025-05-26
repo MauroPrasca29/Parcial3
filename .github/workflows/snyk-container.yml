@@ -37,11 +37,11 @@ jobs:
 
       - name: Run Snyk scan
         continue-on-error: true
-        uses: snyk/actions/docker@v2
+        uses: snyk/actions@v0.13.0  # Versión válida según la documentación
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          image: snyk-test
+          command: docker  # Indica que es para Docker
           args: --file=Dockerfile --sarif-file-output=snyk.sarif
 
       - name: Fix null securitySeverity in SARIF
@@ -55,4 +55,3 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: snyk.sarif
-
