@@ -55,8 +55,6 @@ jobs:
             exit 1
           fi
 
-      - name: Fix securitySeverity null issue in SARIF
-        run: sed -i 's/"securitySeverity":null/"securitySeverity":0.0/g' snyk.sarif
 
       - name: Show fixed SARIF file content
         run: cat snyk.sarif
