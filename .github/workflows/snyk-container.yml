@@ -32,34 +32,26 @@ jobs:
       actions: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t snyk-test .
+    - name: Build Docker image
+      run: docker build -t snyk-test .
 
-      - name: Run Snyk to check Docker image for vulnerabilities
-        continue-on-error: true
-        uses: snyk/actions/docker@v0.6.1
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          image: snyk-test
-          args: --file=Dockerfile --sarif-file-output=snyk.sarif
-
-      - name: Verifica si SARIF existe
-        run: |
-          if [ -f snyk.sarif ]; then
-            echo "✅ SARIF generado"
-          else
-            echo "❌ SARIF no generado"
-            exit 1
-          fi
+    - name: Run Snyk to check Docker image for vulnerabilities
+      continue-on-error: true
+      uses: snyk/actions/docker@v2
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        image: snyk-test
+        args: >
+          --file=Dockerfile
+          --sarif-file-output=snyk.sarif
 
 
-      - name: Show fixed SARIF file content
-        run: cat snyk.sarif
+    - name: Upload result to GitHub Code Scanning
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: snyk.sarif
 
-      - name: Upload result to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: snyk.sarif
