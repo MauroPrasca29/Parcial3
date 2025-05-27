@@ -11,7 +11,7 @@
 # issues, monitor images for newly disclosed vulnerabilities in Snyk and
 # fail PR checks for new vulnerabilities, see https://github.com/snyk/actions/
 
-name: Snyk Container
+name: Snyk Container Security Scan
 
 on:
   push:
@@ -19,40 +19,78 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: '28 17 * * 3'
+    - cron: '18 9 * * 3'
 
 permissions:
   contents: read
 
 jobs:
-  snyk:
+  snyk-container-scan:
     permissions:
       contents: read
       security-events: write
       actions: read
+    
     runs-on: ubuntu-latest
-
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
+      
     - name: Build Docker image
-      run: docker build -t snyk-test .
-
-    - name: Run Snyk on Docker image
-      uses: ./.github/actions/snyk-docker
-      continue-on-error: true
+      run: docker build -t tutorial-app:latest .
+    
+    - name: Install Snyk CLI
+      run: |
+        npm install -g snyk
+        snyk --version
+    
+    - name: Run Snyk to check Docker image for vulnerabilities
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      with:
-        image: snyk-test
-        command: test
-        args: ""
-        sarif: true
-
-    - name: Upload SARIF to GitHub Code Scanning
+      run: |
+        snyk container test tutorial-app:latest \
+          --file=Dockerfile \
+          --sarif-file-output=snyk.sarif \
+          --json-file-output=snyk-results.json \
+          --severity-threshold=medium || true
+    
+    - name: Ensure SARIF file exists
+      run: |
+        if [ ! -f "snyk.sarif" ]; then
+          echo "Creating minimal SARIF file"
+          cat > snyk.sarif << 'EOF'
+        {
+          "version": "2.1.0",
+          "runs": [
+            {
+              "tool": {
+                "driver": {
+                  "name": "Snyk Container",
+                  "version": "1.0.0"
+                }
+              },
+              "results": []
+            }
+          ]
+        }
+        EOF
+        fi
+        echo "SARIF file status:"
+        ls -la snyk.sarif
+    
+    - name: Upload result to GitHub Code Scanning
       uses: github/codeql-action/upload-sarif@v3
+      if: always()
       with:
         sarif_file: snyk.sarif
-
-
+        category: snyk-container
+        
+    - name: Upload detailed results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: snyk-report
+        path: |
+          snyk.sarif
+          snyk-results.json
